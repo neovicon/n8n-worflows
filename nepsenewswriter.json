@@ -1,17 +1,38 @@
 {
-  "name": "Tech News AI Writer (GNews Alternative)",
+  "name": "Nepse Daily AI News",
   "nodes": [
     {
       "parameters": {
-        "httpRequestMethod": "GET",
-        "url": "https://gnews.io/api/v4/top-headlines?category=technology&lang=en&max=5&apikey=6d23fb2bc84287878286a33984bc84b3",
-        "responseFormat": "json"
+        "cronExpression": "0 8 * * *"
       },
       "id": "1",
-      "name": "Fetch Tech News",
+      "name": "Daily Trigger",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [50, 300]
+    },
+    {
+      "parameters": {
+        "httpRequestMethod": "GET",
+        "url": "https://gnews.io/api/v4/top-headlines",
+        "responseFormat": "json",
+        "queryParametersUi": {
+          "parameter": [
+            { "name": "category", "value": "business" },
+            { "name": "lang", "value": "en" },
+            { "name": "max", "value": "5" },
+            { "name": "apikey", "value": "={{$credentials.gnewsApi}}" }
+          ]
+        }
+      },
+      "id": "2",
+      "name": "Fetch Nepse News",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 1,
-      "position": [250, 300]
+      "position": [250, 300],
+      "credentials": {
+        "httpBasicAuth": "GNews API Key"
+      }
     },
     {
       "parameters": {
@@ -20,28 +41,28 @@
         "messages": [
           {
             "role": "system",
-            "content": "You are a bold, confident, opinionated tech news writer for a high-authority insider publication. Avoid jokes or casual questions. Write in strong, structured paragraphs with impactful summaries."
+            "content": "You are a bold, confident, opinionated financial news writer for the Nepalese stock market (NEPSE). Avoid jokes, keep tone professional but impactful."
           },
           {
             "role": "user",
-            "content": "Rewrite the following tech news into a compelling, opinionated article with a strong headline:\n\n{{JSON.stringify($json.articles)}}"
+            "content": "Rewrite the following NEPSE-related headlines into a compelling article with a strong headline and short intro:\n\n={{JSON.stringify($json[\"articles\"])}}"
           }
         ]
       },
-      "id": "2",
+      "id": "3",
       "name": "AI Rewrite",
       "type": "n8n-nodes-base.openAi",
       "typeVersion": 1,
       "position": [500, 300],
       "credentials": {
-        "openAiApi": "YOUR_OPENAI_API_KEY"
+        "openAiApi": "OpenAI API"
       }
     },
     {
       "parameters": {
-        "functionCode": "return [{ json: { article: $json } }];"
+        "functionCode": "return [{ json: { text: $json.choices[0].message.content } }];"
       },
-      "id": "3",
+      "id": "4",
       "name": "Prepare Output",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
@@ -49,27 +70,14 @@
     }
   ],
   "connections": {
-    "Fetch Tech News": {
-      "main": [
-        [
-          {
-            "node": "AI Rewrite",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+    "Daily Trigger": {
+      "main": [[{ "node": "Fetch Nepse News", "type": "main", "index": 0 }]]
+    },
+    "Fetch Nepse News": {
+      "main": [[{ "node": "AI Rewrite", "type": "main", "index": 0 }]]
     },
     "AI Rewrite": {
-      "main": [
-        [
-          {
-            "node": "Prepare Output",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{ "node": "Prepare Output", "type": "main", "index": 0 }]]
     }
   }
 }
