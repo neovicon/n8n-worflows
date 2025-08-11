@@ -1,0 +1,75 @@
+{
+  "name": "Tech News AI Writer (GNews Alternative)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpRequestMethod": "GET",
+        "url": "https://gnews.io/api/v4/top-headlines?category=technology&lang=en&max=5&apikey=YOUR_GNEWS_API_KEY",
+        "responseFormat": "json"
+      },
+      "id": "1",
+      "name": "Fetch Tech News",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "operation": "chat",
+        "model": "gpt-4o-mini",
+        "messages": [
+          {
+            "role": "system",
+            "content": "You are a bold, confident, opinionated tech news writer for a high-authority insider publication. Avoid jokes or casual questions. Write in strong, structured paragraphs with impactful summaries."
+          },
+          {
+            "role": "user",
+            "content": "Rewrite the following tech news into a compelling, opinionated article with a strong headline:\n\n{{JSON.stringify($json.articles)}}"
+          }
+        ]
+      },
+      "id": "2",
+      "name": "AI Rewrite",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [500, 300],
+      "credentials": {
+        "openAiApi": "YOUR_OPENAI_API_KEY"
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{ json: { article: $json } }];"
+      },
+      "id": "3",
+      "name": "Prepare Output",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [750, 300]
+    }
+  ],
+  "connections": {
+    "Fetch Tech News": {
+      "main": [
+        [
+          {
+            "node": "AI Rewrite",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Rewrite": {
+      "main": [
+        [
+          {
+            "node": "Prepare Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
