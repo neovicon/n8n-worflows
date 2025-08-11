@@ -1,5 +1,5 @@
 {
-  "name": "Nepse Daily AI News",
+  "name": "Tech News AI Writer (Clean, No Credentials)",
   "nodes": [
     {
       "parameters": {
@@ -18,21 +18,18 @@
         "responseFormat": "json",
         "queryParametersUi": {
           "parameter": [
-            { "name": "category", "value": "business" },
+            { "name": "category", "value": "technology" },
             { "name": "lang", "value": "en" },
             { "name": "max", "value": "5" },
-            { "name": "apikey", "value": "={{$credentials.gnewsApi}}" }
+            { "name": "apikey", "value": "YOUR_GNEWS_API_KEY" }
           ]
         }
       },
       "id": "2",
-      "name": "Fetch Nepse News",
+      "name": "Fetch Tech News",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 1,
-      "position": [250, 300],
-      "credentials": {
-        "httpBasicAuth": "GNews API Key"
-      }
+      "position": [250, 300]
     },
     {
       "parameters": {
@@ -41,11 +38,11 @@
         "messages": [
           {
             "role": "system",
-            "content": "You are a bold, confident, opinionated financial news writer for the Nepalese stock market (NEPSE). Avoid jokes, keep tone professional but impactful."
+            "content": "You are a bold, confident, opinionated tech news writer for a high-authority insider publication. Avoid jokes or casual questions. Write in strong, structured paragraphs with impactful summaries."
           },
           {
             "role": "user",
-            "content": "Rewrite the following NEPSE-related headlines into a compelling article with a strong headline and short intro:\n\n={{JSON.stringify($json[\"articles\"])}}"
+            "content": "Rewrite the following tech news into a compelling, opinionated article with a strong headline:\n\n={{JSON.stringify($json[\"articles\"])}}"
           }
         ]
       },
@@ -53,14 +50,11 @@
       "name": "AI Rewrite",
       "type": "n8n-nodes-base.openAi",
       "typeVersion": 1,
-      "position": [500, 300],
-      "credentials": {
-        "openAiApi": "OpenAI API"
-      }
+      "position": [500, 300]
     },
     {
       "parameters": {
-        "functionCode": "return [{ json: { text: $json.choices[0].message.content } }];"
+        "functionCode": "return [{ json: { article: $json } }];"
       },
       "id": "4",
       "name": "Prepare Output",
@@ -71,13 +65,25 @@
   ],
   "connections": {
     "Daily Trigger": {
-      "main": [[{ "node": "Fetch Nepse News", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          { "node": "Fetch Tech News", "type": "main", "index": 0 }
+        ]
+      ]
     },
-    "Fetch Nepse News": {
-      "main": [[{ "node": "AI Rewrite", "type": "main", "index": 0 }]]
+    "Fetch Tech News": {
+      "main": [
+        [
+          { "node": "AI Rewrite", "type": "main", "index": 0 }
+        ]
+      ]
     },
     "AI Rewrite": {
-      "main": [[{ "node": "Prepare Output", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          { "node": "Prepare Output", "type": "main", "index": 0 }
+        ]
+      ]
     }
   }
 }
