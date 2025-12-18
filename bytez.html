@@ -1,0 +1,928 @@
+{
+  "name": "Bytez Video Automation Suite",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "workflow-selector",
+      "name": "Start - Select Workflow",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "workflow_type",
+              "value": "single"
+            },
+            {
+              "name": "prompt",
+              "value": "A serene sunset over mountains with birds flying"
+            },
+            {
+              "name": "duration",
+              "value": "5"
+            },
+            {
+              "name": "style",
+              "value": "cinematic"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-params",
+      "name": "Set Video Parameters",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.bytez.com/v1/video/generate",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"prompt\": \"{{ $json.prompt }}\",\n  \"duration\": {{ $json.duration }},\n  \"aspect_ratio\": \"16:9\",\n  \"style\": \"{{ $json.style }}\"\n}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "id": "bytez-generate",
+      "name": "Bytez API - Generate Video",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [650, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "1",
+          "name": "Bytez API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Poll for video completion\nconst videoId = $input.item.json.id;\nconst apiKey = $credentials.httpHeaderAuth.value;\n\nlet attempts = 0;\nconst maxAttempts = 60;\n\nwhile (attempts < maxAttempts) {\n  try {\n    const response = await $http.request({\n      method: 'GET',\n      url: `https://api.bytez.com/v1/video/${videoId}`,\n      headers: {\n        'Authorization': `Bearer ${apiKey}`\n      }\n    });\n    \n    if (response.status === 'completed') {\n      return { \n        json: {\n          ...response,\n          video_url: response.output_url,\n          video_id: videoId,\n          metadata: $('Set Video Parameters').item.json\n        }\n      };\n    } else if (response.status === 'failed') {\n      throw new Error(`Video generation failed: ${response.error}`);\n    }\n    \n    await new Promise(resolve => setTimeout(resolve, 10000));\n    attempts++;\n    \n  } catch (error) {\n    if (attempts >= maxAttempts - 1) {\n      throw new Error(`Polling failed: ${error.message}`);\n    }\n    await new Promise(resolve => setTimeout(resolve, 10000));\n    attempts++;\n  }\n}\n\nthrow new Error('Video generation timeout after 10 minutes');"
+      },
+      "id": "poll-completion",
+      "name": "Poll for Completion",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.video_url }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "id": "download-video",
+      "name": "Download Video",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "operation": "upload",
+        "containerName": "generated-videos",
+        "blobName": "={{ $('Set Video Parameters').item.json.prompt.substring(0,30).replace(/\\s+/g, '_') }}_{{ $now.toUnixInteger() }}.mp4",
+        "binaryPropertyName": "data",
+        "additionalFields": {
+          "metadata": {
+            "metadataProperties": [
+              {
+                "name": "prompt",
+                "value": "={{ $('Set Video Parameters').item.json.prompt }}"
+              },
+              {
+                "name": "duration",
+                "value": "={{ $('Set Video Parameters').item.json.duration }}"
+              },
+              {
+                "name": "timestamp",
+                "value": "={{ $now.toISO() }}"
+              }
+            ]
+          }
+        }
+      },
+      "id": "upload-azure",
+      "name": "Upload to Azure Blob",
+      "type": "n8n-nodes-base.azureBlob",
+      "typeVersion": 1,
+      "position": [1250, 300],
+      "credentials": {
+        "azureBlob": {
+          "id": "2",
+          "name": "Azure Blob Storage"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "status",
+              "value": "success"
+            },
+            {
+              "name": "azure_url",
+              "value": "={{ $json.url }}"
+            },
+            {
+              "name": "video_id",
+              "value": "={{ $('Poll for Completion').item.json.video_id }}"
+            }
+          ]
+        }
+      },
+      "id": "success-response",
+      "name": "Success Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [1450, 300]
+    },
+    {
+      "parameters": {},
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger (Queue)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 600],
+      "webhookId": "bytez-video-queue"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validate and normalize input\nconst input = $input.item.json;\n\nconst normalized = {\n  queue_id: input.id || input.rowNumber || `queue_${Date.now()}`,\n  prompt: input.prompt || input.Prompt || input.description,\n  duration: parseInt(input.duration || input.Duration || 5),\n  style: input.style || input.Style || 'realistic',\n  priority: input.priority || input.Priority || 'normal',\n  source: input.source || 'webhook',\n  timestamp: new Date().toISOString()\n};\n\nif (!normalized.prompt) {\n  throw new Error('Prompt is required');\n}\n\nif (normalized.duration < 1 || normalized.duration > 60) {\n  throw new Error('Duration must be between 1 and 60 seconds');\n}\n\nreturn { json: normalized };"
+      },
+      "id": "validate-input",
+      "name": "Validate Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 600]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Rate limiting logic\nconst staticData = $getWorkflowStaticData('global');\n\nif (!staticData.rateLimitTracker) {\n  staticData.rateLimitTracker = {\n    requests: [],\n    dailyCount: 0,\n    lastResetDate: new Date().toDateString()\n  };\n}\n\nconst tracker = staticData.rateLimitTracker;\nconst now = Date.now();\nconst oneHourAgo = now - (60 * 60 * 1000);\nconst today = new Date().toDateString();\n\nif (tracker.lastResetDate !== today) {\n  tracker.dailyCount = 0;\n  tracker.lastResetDate = today;\n}\n\ntracker.requests = tracker.requests.filter(t => t > oneHourAgo);\n\nconst HOURLY_LIMIT = 50;\nconst DAILY_LIMIT = 500;\nconst MIN_REQUEST_INTERVAL = 2000;\n\nconst hourlyCount = tracker.requests.length;\nconst canProceed = hourlyCount < HOURLY_LIMIT && tracker.dailyCount < DAILY_LIMIT;\n\nif (!canProceed) {\n  return {\n    json: {\n      ...$input.item.json,\n      status: 'rate_limited',\n      retry_after: 3600,\n      reason: hourlyCount >= HOURLY_LIMIT ? 'hourly_limit' : 'daily_limit'\n    }\n  };\n}\n\nconst lastRequestTime = tracker.requests[tracker.requests.length - 1] || 0;\nconst timeSinceLastRequest = now - lastRequestTime;\n\nif (timeSinceLastRequest < MIN_REQUEST_INTERVAL) {\n  const waitTime = MIN_REQUEST_INTERVAL - timeSinceLastRequest;\n  await new Promise(resolve => setTimeout(resolve, waitTime));\n}\n\ntracker.requests.push(now);\ntracker.dailyCount++;\n\nreturn {\n  json: {\n    ...$input.item.json,\n    status: 'proceeding',\n    current_hourly_count: hourlyCount + 1,\n    current_daily_count: tracker.dailyCount\n  }\n};"
+      },
+      "id": "check-rate-limit",
+      "name": "Check Rate Limit",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 600]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.status }}",
+              "operation": "equals",
+              "value2": "proceeding"
+            }
+          ]
+        }
+      },
+      "id": "if-can-proceed",
+      "name": "Can Proceed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [850, 600]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Queue for retry\nconst staticData = $getWorkflowStaticData('global');\n\nif (!staticData.retryQueue) {\n  staticData.retryQueue = [];\n}\n\nstaticData.retryQueue.push({\n  ...$input.item.json,\n  retry_count: ($input.item.json.retry_count || 0) + 1,\n  next_retry_time: Date.now() + ($input.item.json.retry_after * 1000)\n});\n\nreturn {\n  json: {\n    status: 'queued_for_retry',\n    queue_id: $input.item.json.queue_id,\n    retry_after: $input.item.json.retry_after\n  }\n};"
+      },
+      "id": "queue-retry",
+      "name": "Queue for Retry",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1050, 700]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.bytez.com/v1/video/generate",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"prompt\": \"{{ $json.prompt }}\",\n  \"duration\": {{ $json.duration }},\n  \"aspect_ratio\": \"16:9\",\n  \"style\": \"{{ $json.style }}\"\n}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "id": "queue-generate",
+      "name": "Generate from Queue",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1050, 500],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "1",
+          "name": "Bytez API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Poll with error handling\nconst videoId = $input.item.json.id;\nconst apiKey = $credentials.httpHeaderAuth.value;\nconst maxAttempts = 60;\nlet attempts = 0;\n\nwhile (attempts < maxAttempts) {\n  try {\n    const response = await $http.request({\n      method: 'GET',\n      url: `https://api.bytez.com/v1/video/${videoId}`,\n      headers: {\n        'Authorization': `Bearer ${apiKey}`\n      },\n      options: {\n        timeout: 30000\n      }\n    });\n    \n    if (response.status === 'completed') {\n      return {\n        json: {\n          ...response,\n          video_url: response.output_url,\n          original_input: $input.item.json,\n          attempts: attempts + 1,\n          processing_status: 'success'\n        }\n      };\n    } else if (response.status === 'failed') {\n      return {\n        json: {\n          ...response,\n          original_input: $input.item.json,\n          attempts: attempts + 1,\n          processing_status: 'failed',\n          error_message: response.error || 'Unknown error'\n        }\n      };\n    }\n    \n  } catch (error) {\n    if (attempts >= maxAttempts - 1) {\n      return {\n        json: {\n          original_input: $input.item.json,\n          processing_status: 'error',\n          error_message: error.message\n        }\n      };\n    }\n  }\n  \n  await new Promise(resolve => setTimeout(resolve, 10000));\n  attempts++;\n}\n\nreturn {\n  json: {\n    original_input: $input.item.json,\n    processing_status: 'timeout',\n    error_message: 'Processing timeout after 10 minutes'\n  }\n};"
+      },
+      "id": "queue-poll",
+      "name": "Poll with Error Handling",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 500]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.processing_status }}",
+              "operation": "equals",
+              "value2": "success"
+            }
+          ]
+        }
+      },
+      "id": "if-success",
+      "name": "Processing Success?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1450, 500]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.video_url }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "id": "queue-download",
+      "name": "Download from Queue",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1650, 400]
+    },
+    {
+      "parameters": {
+        "operation": "upload",
+        "containerName": "queue-videos",
+        "blobName": "={{ $('Validate Input').item.json.queue_id }}.mp4",
+        "binaryPropertyName": "data"
+      },
+      "id": "queue-upload",
+      "name": "Upload Queue Video",
+      "type": "n8n-nodes-base.azureBlob",
+      "typeVersion": 1,
+      "position": [1850, 400],
+      "credentials": {
+        "azureBlob": {
+          "id": "2",
+          "name": "Azure Blob Storage"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Handle failure and retry logic\nconst input = $input.item.json;\nconst retryCount = input.original_input.retry_count || 0;\nconst MAX_RETRIES = 3;\n\nif (retryCount < MAX_RETRIES) {\n  const staticData = $getWorkflowStaticData('global');\n  \n  if (!staticData.retryQueue) {\n    staticData.retryQueue = [];\n  }\n  \n  staticData.retryQueue.push({\n    ...input.original_input,\n    retry_count: retryCount + 1,\n    next_retry_time: Date.now() + (5 * 60 * 1000),\n    last_error: input.error_message\n  });\n  \n  return {\n    json: {\n      status: 'queued_for_retry',\n      queue_id: input.original_input.queue_id,\n      retry_count: retryCount + 1,\n      error: input.error_message\n    }\n  };\n} else {\n  return {\n    json: {\n      status: 'permanent_failure',\n      queue_id: input.original_input.queue_id,\n      error: input.error_message,\n      retry_count: retryCount\n    }\n  };\n}"
+      },
+      "id": "handle-failure",
+      "name": "Handle Failure",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1650, 600]
+    },
+    {
+      "parameters": {},
+      "id": "segment-trigger",
+      "name": "Segmented Video Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [250, 1000]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Calculate video segments\nconst mainPrompt = $input.item.json.main_prompt || 'A cinematic journey through nature';\nconst segmentDuration = parseInt($input.item.json.segment_duration) || 30;\nconst totalDuration = parseInt($input.item.json.total_duration) || 300;\nconst style = $input.item.json.style || 'cinematic';\n\nconst numSegments = Math.ceil(totalDuration / segmentDuration);\nconst projectId = `project_${Date.now()}`;\n\nconst segments = [];\nfor (let i = 0; i < numSegments; i++) {\n  segments.push({\n    segment_id: i,\n    project_id: projectId,\n    prompt: `${mainPrompt} - Part ${i + 1} of ${numSegments}`,\n    duration: segmentDuration,\n    style: style,\n    is_first: i === 0,\n    is_last: i === numSegments - 1,\n    total_segments: numSegments\n  });\n}\n\nreturn segments.map(seg => ({ json: seg }));"
+      },
+      "id": "calculate-segments",
+      "name": "Calculate Segments",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 1000]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "loop-segments",
+      "name": "Loop Over Segments",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [650, 1000]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.is_first }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "is-first-segment",
+      "name": "Is First Segment?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [850, 1000]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get last frame from previous segment\nconst projectId = $json.project_id;\nconst previousSegmentId = $json.segment_id - 1;\n\nconst staticData = $getWorkflowStaticData('global');\nconst lastFrameUrl = staticData[`${projectId}_segment_${previousSegmentId}_lastframe`];\n\nreturn {\n  json: {\n    ...$input.item.json,\n    reference_image_url: lastFrameUrl || ''\n  }\n};"
+      },
+      "id": "get-last-frame",
+      "name": "Get Last Frame",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1050, 1100]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.bytez.com/v1/video/generate",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"prompt\": \"{{ $json.prompt }}\",\n  \"duration\": {{ $json.duration }},\n  \"style\": \"{{ $json.style }}\",\n  \"reference_image\": \"{{ $json.reference_image_url || '' }}\",\n  \"image_weight\": 0.7\n}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "id": "segment-generate",
+      "name": "Generate Segment",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1250, 1000],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "1",
+          "name": "Bytez API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Poll for segment completion\nconst videoId = $input.item.json.id;\nconst apiKey = $credentials.httpHeaderAuth.value;\nlet attempts = 0;\nconst maxAttempts = 60;\n\nwhile (attempts < maxAttempts) {\n  const response = await $http.request({\n    method: 'GET',\n    url: `https://api.bytez.com/v1/video/${videoId}`,\n    headers: {\n      'Authorization': `Bearer ${apiKey}`\n    }\n  });\n  \n  if (response.status === 'completed') {\n    return { \n      json: {\n        ...response,\n        video_url: response.output_url,\n        segment_data: $input.item.json\n      }\n    };\n  } else if (response.status === 'failed') {\n    throw new Error(`Segment generation failed: ${response.error}`);\n  }\n  \n  await new Promise(resolve => setTimeout(resolve, 10000));\n  attempts++;\n}\n\nthrow new Error('Segment generation timeout');"
+      },
+      "id": "segment-poll",
+      "name": "Poll Segment",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1450, 1000]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.video_url }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "id": "segment-download",
+      "name": "Download Segment",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1650, 1000]
+    },
+    {
+      "parameters": {
+        "operation": "upload",
+        "containerName": "video-segments",
+        "blobName": "={{ $json.segment_data.project_id }}/segment_{{ $json.segment_data.segment_id }}.mp4",
+        "binaryPropertyName": "data"
+      },
+      "id": "segment-upload",
+      "name": "Upload Segment",
+      "type": "n8n-nodes-base.azureBlob",
+      "typeVersion": 1,
+      "position": [1850, 1000],
+      "credentials": {
+        "azureBlob": {
+          "id": "2",
+          "name": "Azure Blob Storage"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Store segment info and extract last frame placeholder\nconst staticData = $getWorkflowStaticData('global');\nconst projectId = $json.segment_data.project_id;\nconst segmentId = $json.segment_data.segment_id;\n\n// Initialize segments array\nif (!staticData[`${projectId}_segments`]) {\n  staticData[`${projectId}_segments`] = [];\n}\n\n// Add segment info\nstaticData[`${projectId}_segments`].push({\n  segment_id: segmentId,\n  azure_url: $json.url,\n  duration: $json.segment_data.duration\n});\n\n// Sort by segment_id\nstaticData[`${projectId}_segments`].sort((a, b) => a.segment_id - b.segment_id);\n\n// Store placeholder for last frame (in production, extract with FFmpeg)\nconst lastFrameUrl = `https://yourstorage.blob.core.windows.net/frames/${projectId}_segment_${segmentId}_lastframe.jpg`;\nstaticData[`${projectId}_segment_${segmentId}_lastframe`] = lastFrameUrl;\n\nreturn { \n  json: {\n    ...$json,\n    segments_completed: staticData[`${projectId}_segments`].length,\n    total_segments: $json.segment_data.total_segments\n  } \n};"
+      },
+      "id": "store-segment",
+      "name": "Store Segment Info",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2050, 1000]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.segments_completed }}",
+              "operation": "equal",
+              "value2": "={{ $json.total_segments }}"
+            }
+          ]
+        }
+      },
+      "id": "all-segments-done",
+      "name": "All Segments Done?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2250, 1000]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare for stitching\nconst staticData = $getWorkflowStaticData('global');\nconst projectId = $json.segment_data.project_id;\nconst segments = staticData[`${projectId}_segments`] || [];\n\nreturn {\n  json: {\n    project_id: projectId,\n    segments: segments,\n    ready_for_stitching: true\n  }\n};"
+      },
+      "id": "prepare-stitch",
+      "name": "Prepare for Stitching",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2450, 900]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "status",
+              "value": "segments_complete"
+            },
+            {
+              "name": "message",
+              "value": "All segments generated. Manual stitching required with FFmpeg or video editor."
+            },
+            {
+              "name": "project_id",
+              "value": "={{ $json.project_id }}"
+            },
+            {
+              "name": "segment_count",
+              "value": "={{ $json.segments.length }}"
+            }
+          ]
+        }
+      },
+      "id": "stitching-note",
+      "name": "Stitching Instructions",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [2650, 900]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "id": "retry-schedule",
+      "name": "Retry Queue Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 1400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get retry queue\nconst staticData = $getWorkflowStaticData('global');\nconst retryQueue = staticData.retryQueue || [];\nconst now = Date.now();\n\nconst readyForRetry = retryQueue.filter(item => \n  item.next_retry_time <= now\n);\n\n// Remove from queue\nstaticData.retryQueue = retryQueue.filter(item => \n  item.next_retry_time > now\n);\n\nif (readyForRetry.length === 0) {\n  return [];\n}\n\nreturn readyForRetry.map(item => ({ json: item }));"
+      },
+      "id": "get-retry-queue",
+      "name": "Get Retry Queue",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 1400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.length }}",
+              "operation": "larger",
+              "value2": 0
+            }
+          ]
+        }
+      },
+      "id": "has-retries",
+      "name": "Has Items to Retry?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [650, 1400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/bytez-video-queue",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "trigger-retry",
+      "name": "Trigger Retry via Webhook",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [850, 1300]
+    }
+  ],
+  "connections": {
+    "Start - Select Workflow": {
+      "main": [
+        [
+          {
+            "node": "Set Video Parameters",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Video Parameters": {
+      "main": [
+        [
+          {
+            "node": "Bytez API - Generate Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bytez API - Generate Video": {
+      "main": [
+        [
+          {
+            "node": "Poll for Completion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Poll for Completion": {
+      "main": [
+        [
+          {
+            "node": "Download Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Video": {
+      "main": [
+        [
+          {
+            "node": "Upload to Azure Blob",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload to Azure Blob": {
+      "main": [
+        [
+          {
+            "node": "Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Trigger (Queue)": {
+      "main": [
+        [
+          {
+            "node": "Validate Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Input": {
+      "main": [
+        [
+          {
+            "node": "Check Rate Limit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Rate Limit": {
+      "main": [
+        [
+          {
+            "node": "Can Proceed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Can Proceed?": {
+      "main": [
+        [
+          {
+            "node": "Generate from Queue",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Queue for Retry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate from Queue": {
+      "main": [
+        [
+          {
+            "node": "Poll with Error Handling",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Poll with Error Handling": {
+      "main": [
+        [
+          {
+            "node": "Processing Success?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Processing Success?": {
+      "main": [
+        [
+          {
+            "node": "Download from Queue",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Handle Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download from Queue": {
+      "main": [
+        [
+          {
+            "node": "Upload Queue Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Segmented Video Trigger": {
+      "main": [
+        [
+          {
+            "node": "Calculate Segments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Segments": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Segments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Segments": {
+      "main": [
+        [
+          {
+            "node": "Is First Segment?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is First Segment?": {
+      "main": [
+        [
+          {
+            "node": "Generate Segment",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Last Frame",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Last Frame": {
+      "main": [
+        [
+          {
+            "node": "Generate Segment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Segment": {
+      "main": [
+        [
+          {
+            "node": "Poll Segment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Poll Segment": {
+      "main": [
+        [
+          {
+            "node": "Download Segment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Segment": {
+      "main": [
+        [
+          {
+            "node": "Upload Segment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload Segment": {
+      "main": [
+        [
+          {
+            "node": "Store Segment Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Segment Info": {
+      "main": [
+        [
+          {
+            "node": "All Segments Done?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "All Segments Done?": {
+      "main": [
+        [
+          {
+            "node": "Prepare for Stitching",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop Over Segments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare for Stitching": {
+      "main": [
+        [
+          {
+            "node": "Stitching Instructions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retry Queue Schedule": {
+      "main": [
+        [
+          {
+            "node": "Get Retry Queue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Retry Queue": {
+      "main": [
+        [
+          {
+            "node": "Has Items to Retry?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Items to Retry?": {
+      "main": [
+        [
+          {
+            "node": "Trigger Retry via Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2024-12-18T00:00:00.000Z",
+  "versionId": "1"
+}
