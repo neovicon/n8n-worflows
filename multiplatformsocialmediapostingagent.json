@@ -1,0 +1,810 @@
+{
+  "name": "Multi-Platform Social Media Posting Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "social-post-agent",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "social-post-agent"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "text-exists",
+              "leftValue": "={{ $json.body.text }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            },
+            {
+              "id": "platforms-exists",
+              "leftValue": "={{ $json.body.platforms }}",
+              "rightValue": "",
+              "operator": {
+                "type": "array",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "input-validation",
+      "name": "Input Validation",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "error-status",
+              "name": "status",
+              "value": "error",
+              "type": "string"
+            },
+            {
+              "id": "error-message",
+              "name": "message",
+              "value": "Missing required fields: text and platforms are required",
+              "type": "string"
+            },
+            {
+              "id": "request-id",
+              "name": "request_id",
+              "value": "={{ $now.toISO() }}-{{ $runIndex }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "validation-error",
+      "name": "Validation Error",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [680, 480]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "base-text",
+              "name": "text",
+              "value": "={{ $json.body.text }}",
+              "type": "string"
+            },
+            {
+              "id": "image-url",
+              "name": "image",
+              "value": "={{ $json.body.image || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "platforms-array",
+              "name": "platforms",
+              "value": "={{ $json.body.platforms }}",
+              "type": "array"
+            },
+            {
+              "id": "twitter-text",
+              "name": "twitter_text",
+              "value": "={{ $json.body.text.length > 280 ? $json.body.text.slice(0, 277) + '...' : $json.body.text }}",
+              "type": "string"
+            },
+            {
+              "id": "facebook-text",
+              "name": "facebook_text",
+              "value": "={{ $json.body.text }}",
+              "type": "string"
+            },
+            {
+              "id": "linkedin-text",
+              "name": "linkedin_text",
+              "value": "={{ $json.body.text }}",
+              "type": "string"
+            },
+            {
+              "id": "instagram-text",
+              "name": "instagram_text",
+              "value": "={{ $json.body.text + '\n\n#socialmedia #automation' }}",
+              "type": "string"
+            },
+            {
+              "id": "telegram-text",
+              "name": "telegram_text",
+              "value": "={{ $json.body.text }}",
+              "type": "string"
+            },
+            {
+              "id": "request-id",
+              "name": "request_id",
+              "value": "={{ $now.toISO() }}-{{ $runIndex }}",
+              "type": "string"
+            },
+            {
+              "id": "timestamp",
+              "name": "timestamp",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "content-formatter",
+      "name": "Content Formatter",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [680, 120]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "multiplex",
+        "options": {}
+      },
+      "id": "split-platforms",
+      "name": "Split Platforms",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [900, 120]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "platform-item",
+              "name": "platform",
+              "value": "={{ $json.platforms }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "item-lists",
+      "name": "Item Lists",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [900, 320]
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.platform }}",
+        "rules": {
+          "rules": [
+            {
+              "value2": "twitter",
+              "output": 0
+            },
+            {
+              "value2": "facebook",
+              "output": 1
+            },
+            {
+              "value2": "linkedin",
+              "output": 2
+            },
+            {
+              "value2": "instagram",
+              "output": 3
+            },
+            {
+              "value2": "telegram",
+              "output": 4
+            }
+          ]
+        },
+        "fallbackOutput": -1
+      },
+      "id": "platform-router",
+      "name": "Platform Router",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [1120, 320]
+    },
+    {
+      "parameters": {
+        "text": "={{ $json.twitter_text }}",
+        "additionalFields": {
+          "attachments": "={{ $json.image ? $json.image : undefined }}"
+        }
+      },
+      "id": "post-to-twitter",
+      "name": "Post to Twitter",
+      "type": "n8n-nodes-base.twitter",
+      "typeVersion": 2,
+      "position": [1340, 120],
+      "continueOnFail": true,
+      "credentials": {
+        "twitterOAuth2Api": {
+          "id": "twitter-credentials",
+          "name": "Twitter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "pageId": {
+          "__rl": true,
+          "value": "",
+          "mode": "id"
+        },
+        "message": "={{ $json.facebook_text }}",
+        "additionalFields": {
+          "link": "={{ $json.image }}"
+        }
+      },
+      "id": "post-to-facebook",
+      "name": "Post to Facebook",
+      "type": "n8n-nodes-base.facebookGraphApi",
+      "typeVersion": 1.1,
+      "position": [1340, 240],
+      "continueOnFail": true,
+      "credentials": {
+        "facebookGraphApi": {
+          "id": "facebook-credentials",
+          "name": "Facebook account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "text": "={{ $json.linkedin_text }}",
+        "additionalFields": {
+          "visibility": "PUBLIC"
+        }
+      },
+      "id": "post-to-linkedin",
+      "name": "Post to LinkedIn",
+      "type": "n8n-nodes-base.linkedin",
+      "typeVersion": 1,
+      "position": [1340, 360],
+      "continueOnFail": true,
+      "credentials": {
+        "linkedInOAuth2Api": {
+          "id": "linkedin-credentials",
+          "name": "LinkedIn account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "upload",
+        "binaryPropertyName": "data",
+        "additionalFields": {
+          "caption": "={{ $json.instagram_text }}"
+        }
+      },
+      "id": "post-to-instagram",
+      "name": "Post to Instagram",
+      "type": "n8n-nodes-base.instagram",
+      "typeVersion": 1,
+      "position": [1340, 480],
+      "continueOnFail": true,
+      "credentials": {
+        "instagramBasicDisplayApi": {
+          "id": "instagram-credentials",
+          "name": "Instagram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "",
+        "text": "={{ $json.telegram_text }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "post-to-telegram",
+      "name": "Post to Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1340, 600],
+      "continueOnFail": true,
+      "credentials": {
+        "telegramApi": {
+          "id": "telegram-credentials",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "platform-name",
+              "name": "platform",
+              "value": "twitter",
+              "type": "string"
+            },
+            {
+              "id": "success-status",
+              "name": "success",
+              "value": "={{ !$json.error }}",
+              "type": "boolean"
+            },
+            {
+              "id": "error-message",
+              "name": "error_message",
+              "value": "={{ $json.error ? $json.error.message : null }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "twitter-result",
+      "name": "Twitter Result",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1560, 120]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "platform-name",
+              "name": "platform",
+              "value": "facebook",
+              "type": "string"
+            },
+            {
+              "id": "success-status",
+              "name": "success",
+              "value": "={{ !$json.error }}",
+              "type": "boolean"
+            },
+            {
+              "id": "error-message",
+              "name": "error_message",
+              "value": "={{ $json.error ? $json.error.message : null }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "facebook-result",
+      "name": "Facebook Result",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1560, 240]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "platform-name",
+              "name": "platform",
+              "value": "linkedin",
+              "type": "string"
+            },
+            {
+              "id": "success-status",
+              "name": "success",
+              "value": "={{ !$json.error }}",
+              "type": "boolean"
+            },
+            {
+              "id": "error-message",
+              "name": "error_message",
+              "value": "={{ $json.error ? $json.error.message : null }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "linkedin-result",
+      "name": "LinkedIn Result",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1560, 360]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "platform-name",
+              "name": "platform",
+              "value": "instagram",
+              "type": "string"
+            },
+            {
+              "id": "success-status",
+              "name": "success",
+              "value": "={{ !$json.error }}",
+              "type": "boolean"
+            },
+            {
+              "id": "error-message",
+              "name": "error_message",
+              "value": "={{ $json.error ? $json.error.message : null }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "instagram-result",
+      "name": "Instagram Result",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1560, 480]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "platform-name",
+              "name": "platform",
+              "value": "telegram",
+              "type": "string"
+            },
+            {
+              "id": "success-status",
+              "name": "success",
+              "value": "={{ !$json.error }}",
+              "type": "boolean"
+            },
+            {
+              "id": "error-message",
+              "name": "error_message",
+              "value": "={{ $json.error ? $json.error.message : null }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "telegram-result",
+      "name": "Telegram Result",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1560, 600]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "mergeByPosition",
+        "options": {}
+      },
+      "id": "merge-results",
+      "name": "Merge Results",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [1780, 360]
+    },
+    {
+      "parameters": {
+        "jsCode": "const results = $input.all();\n\nconst posted_to = [];\nconst failed = [];\n\nfor (const result of results) {\n  if (result.json.success) {\n    posted_to.push(result.json.platform);\n  } else {\n    failed.push(result.json.platform);\n  }\n}\n\nconst request_id = results[0]?.json.request_id || `${new Date().toISOString()}-${$execution.id}`;\nconst timestamp = results[0]?.json.timestamp || new Date().toISOString();\n\nreturn {\n  status: 'completed',\n  posted_to: posted_to,\n  failed: failed,\n  request_id: request_id,\n  timestamp: timestamp\n};"
+      },
+      "id": "format-response",
+      "name": "Format Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2000, 360]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "respond-success",
+      "name": "Respond Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2220, 360]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "respond-error",
+      "name": "Respond Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [900, 480]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Input Validation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Input Validation": {
+      "main": [
+        [
+          {
+            "node": "Content Formatter",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Validation Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validation Error": {
+      "main": [
+        [
+          {
+            "node": "Respond Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Content Formatter": {
+      "main": [
+        [
+          {
+            "node": "Split Platforms",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Split Platforms",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Split Platforms": {
+      "main": [
+        [
+          {
+            "node": "Platform Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Item Lists": {
+      "main": [
+        [
+          {
+            "node": "Split Platforms",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Platform Router": {
+      "main": [
+        [
+          {
+            "node": "Post to Twitter",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Post to Facebook",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Post to LinkedIn",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Post to Instagram",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Post to Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post to Twitter": {
+      "main": [
+        [
+          {
+            "node": "Twitter Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post to Facebook": {
+      "main": [
+        [
+          {
+            "node": "Facebook Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post to LinkedIn": {
+      "main": [
+        [
+          {
+            "node": "LinkedIn Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post to Instagram": {
+      "main": [
+        [
+          {
+            "node": "Instagram Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post to Telegram": {
+      "main": [
+        [
+          {
+            "node": "Telegram Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Twitter Result": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Facebook Result": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LinkedIn Result": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Instagram Result": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Result": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Results": {
+      "main": [
+        [
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Response": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1",
+  "meta": {
+    "instanceId": "n8n-workflow"
+  },
+  "id": "multi-platform-social-post",
+  "tags": []
+}
