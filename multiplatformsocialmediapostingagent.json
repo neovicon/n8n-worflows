@@ -5,13 +5,12 @@
       "parameters": {
         "httpMethod": "POST",
         "path": "social-post-agent",
-        "responseMode": "responseNode",
-        "options": {}
+        "responseMode": "responseNode"
       },
       "id": "webhook-trigger",
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
-      "typeVersion": 2,
+      "typeVersion": 1,
       "position": [240, 300],
       "webhookId": "social-post-agent"
     },
@@ -55,8 +54,7 @@
               "value": "={{ $now.toISO() }}-{{ $runIndex }}"
             }
           ]
-        },
-        "options": {}
+        }
       },
       "id": "validation-error",
       "name": "Validation Error",
@@ -105,8 +103,7 @@
               "value": "={{ $now.toISO() }}"
             }
           ]
-        },
-        "options": {}
+        }
       },
       "id": "content-formatter",
       "name": "Content Formatter",
@@ -169,13 +166,7 @@
       "type": "n8n-nodes-base.twitter",
       "typeVersion": 1,
       "position": [1340, 0],
-      "continueOnFail": true,
-      "credentials": {
-        "twitterOAuth1Api": {
-          "id": "1",
-          "name": "Twitter account"
-        }
-      }
+      "continueOnFail": true
     },
     {
       "parameters": {
@@ -188,13 +179,7 @@
       "type": "n8n-nodes-base.facebook",
       "typeVersion": 1,
       "position": [1340, 120],
-      "continueOnFail": true,
-      "credentials": {
-        "facebookGraphApi": {
-          "id": "2",
-          "name": "Facebook account"
-        }
-      }
+      "continueOnFail": true
     },
     {
       "parameters": {
@@ -206,34 +191,21 @@
       "type": "n8n-nodes-base.linkedin",
       "typeVersion": 1,
       "position": [1340, 240],
-      "continueOnFail": true,
-      "credentials": {
-        "linkedInOAuth2Api": {
-          "id": "3",
-          "name": "LinkedIn account"
-        }
-      }
+      "continueOnFail": true
     },
     {
       "parameters": {
         "authentication": "httpHeaderAuth",
         "requestMethod": "POST",
         "url": "https://graph.instagram.com/v12.0/me/media",
-        "options": {},
         "bodyParametersJson": "={{ JSON.stringify({caption: $json.instagram_text, image_url: $json.image}) }}"
       },
       "id": "post-to-instagram",
       "name": "Post to Instagram",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 3,
+      "typeVersion": 2,
       "position": [1340, 360],
-      "continueOnFail": true,
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "4",
-          "name": "Instagram credentials"
-        }
-      }
+      "continueOnFail": true
     },
     {
       "parameters": {
@@ -246,13 +218,7 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1,
       "position": [1340, 480],
-      "continueOnFail": true,
-      "credentials": {
-        "telegramApi": {
-          "id": "5",
-          "name": "Telegram account"
-        }
-      }
+      "continueOnFail": true
     },
     {
       "parameters": {
@@ -273,8 +239,7 @@
               "value": "={{ !$json.error }}"
             }
           ]
-        },
-        "options": {}
+        }
       },
       "id": "twitter-result",
       "name": "Twitter Result",
@@ -301,8 +266,7 @@
               "value": "={{ !$json.error }}"
             }
           ]
-        },
-        "options": {}
+        }
       },
       "id": "facebook-result",
       "name": "Facebook Result",
@@ -329,8 +293,7 @@
               "value": "={{ !$json.error }}"
             }
           ]
-        },
-        "options": {}
+        }
       },
       "id": "linkedin-result",
       "name": "LinkedIn Result",
@@ -357,8 +320,7 @@
               "value": "={{ !$json.error }}"
             }
           ]
-        },
-        "options": {}
+        }
       },
       "id": "instagram-result",
       "name": "Instagram Result",
@@ -385,8 +347,7 @@
               "value": "={{ !$json.error }}"
             }
           ]
-        },
-        "options": {}
+        }
       },
       "id": "telegram-result",
       "name": "Telegram Result",
@@ -397,8 +358,7 @@
     {
       "parameters": {
         "mode": "mergeByIndex",
-        "join": "inner",
-        "options": {}
+        "join": "inner"
       },
       "id": "merge-results",
       "name": "Merge Results",
@@ -417,9 +377,7 @@
       "position": [2000, 240]
     },
     {
-      "parameters": {
-        "options": {}
-      },
+      "parameters": {},
       "id": "respond-success",
       "name": "Respond Success",
       "type": "n8n-nodes-base.respondToWebhook",
@@ -428,9 +386,8 @@
     },
     {
       "parameters": {
-        "options": {
-          "responseCode": 400
-        }
+        "respondWith": "json",
+        "responseBody": "={{ $json }}"
       },
       "id": "respond-error",
       "name": "Respond Error",
