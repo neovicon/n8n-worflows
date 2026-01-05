@@ -5,184 +5,324 @@
       "parameters": {
         "httpMethod": "POST",
         "path": "social-post-agent",
-        "responseMode": "responseNode"
+        "responseMode": "responseNode",
+        "options": {}
       },
       "id": "webhook-trigger",
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
-      "typeVersion": 1,
+      "typeVersion": 2,
       "position": [240, 300],
       "webhookId": "social-post-agent"
     },
     {
       "parameters": {
         "conditions": {
-          "string": [
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
             {
-              "value1": "={{ $json.body.text }}",
-              "operation": "isNotEmpty"
+              "id": "condition1",
+              "leftValue": "={{ $json.body.text }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            },
+            {
+              "id": "condition2",
+              "leftValue": "={{ $json.body.platforms }}",
+              "rightValue": "",
+              "operator": {
+                "type": "array",
+                "operation": "notEmpty"
+              }
             }
           ],
-          "array": [
-            {
-              "value1": "={{ $json.body.platforms }}",
-              "operation": "isNotEmpty"
-            }
-          ]
-        }
+          "combinator": "and"
+        },
+        "options": {}
       },
       "id": "input-validation",
       "name": "Input Validation",
       "type": "n8n-nodes-base.if",
-      "typeVersion": 1,
+      "typeVersion": 2,
       "position": [460, 300]
     },
     {
       "parameters": {
-        "values": {
-          "string": [
+        "assignments": {
+          "assignments": [
             {
+              "id": "assign1",
               "name": "status",
-              "value": "error"
+              "value": "error",
+              "type": "string"
             },
             {
+              "id": "assign2",
               "name": "message",
-              "value": "Missing required fields: text and platforms are required"
+              "value": "Missing required fields: text and platforms are required",
+              "type": "string"
             },
             {
+              "id": "assign3",
               "name": "request_id",
-              "value": "={{ $now.toISO() }}-{{ $runIndex }}"
+              "value": "={{ $now.toISO() }}-{{ $runIndex }}",
+              "type": "string"
             }
           ]
-        }
+        },
+        "options": {}
       },
       "id": "validation-error",
       "name": "Validation Error",
       "type": "n8n-nodes-base.set",
-      "typeVersion": 1,
+      "typeVersion": 3.4,
       "position": [680, 480]
     },
     {
       "parameters": {
-        "values": {
-          "string": [
+        "assignments": {
+          "assignments": [
             {
+              "id": "assign1",
               "name": "text",
-              "value": "={{ $json.body.text }}"
+              "value": "={{ $json.body.text }}",
+              "type": "string"
             },
             {
+              "id": "assign2",
               "name": "image",
-              "value": "={{ $json.body.image || '' }}"
+              "value": "={{ $json.body.image || '' }}",
+              "type": "string"
             },
             {
+              "id": "assign3",
               "name": "twitter_text",
-              "value": "={{ $json.body.text.length > 280 ? $json.body.text.slice(0, 277) + '...' : $json.body.text }}"
+              "value": "={{ $json.body.text.length > 280 ? $json.body.text.slice(0, 277) + '...' : $json.body.text }}",
+              "type": "string"
             },
             {
+              "id": "assign4",
               "name": "facebook_text",
-              "value": "={{ $json.body.text }}"
+              "value": "={{ $json.body.text }}",
+              "type": "string"
             },
             {
+              "id": "assign5",
               "name": "linkedin_text",
-              "value": "={{ $json.body.text }}"
+              "value": "={{ $json.body.text }}",
+              "type": "string"
             },
             {
+              "id": "assign6",
               "name": "instagram_text",
-              "value": "={{ $json.body.text + '\\n\\n#socialmedia #automation' }}"
+              "value": "={{ $json.body.text + '\\n\\n#socialmedia #automation' }}",
+              "type": "string"
             },
             {
+              "id": "assign7",
               "name": "telegram_text",
-              "value": "={{ $json.body.text }}"
+              "value": "={{ $json.body.text }}",
+              "type": "string"
             },
             {
+              "id": "assign8",
               "name": "request_id",
-              "value": "={{ $now.toISO() }}-{{ $runIndex }}"
+              "value": "={{ $now.toISO() }}-{{ $runIndex }}",
+              "type": "string"
             },
             {
+              "id": "assign9",
               "name": "timestamp",
-              "value": "={{ $now.toISO() }}"
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            },
+            {
+              "id": "assign10",
+              "name": "platforms",
+              "value": "={{ $json.body.platforms }}",
+              "type": "array"
             }
           ]
-        }
+        },
+        "options": {}
       },
       "id": "content-formatter",
       "name": "Content Formatter",
       "type": "n8n-nodes-base.set",
-      "typeVersion": 1,
+      "typeVersion": 3.4,
       "position": [680, 120]
     },
     {
       "parameters": {
-        "functionCode": "const platforms = $input.first().json.body.platforms;\nconst baseData = $input.first().json;\n\nconst items = platforms.map(platform => ({\n  json: {\n    ...baseData,\n    platform: platform\n  }\n}));\n\nreturn items;"
+        "jsCode": "const platforms = $input.first().json.platforms;\nconst baseData = $input.first().json;\n\nconst items = platforms.map(platform => ({\n  json: {\n    ...baseData,\n    platform: platform\n  }\n}));\n\nreturn items;"
       },
       "id": "split-platforms",
       "name": "Split Platforms",
-      "type": "n8n-nodes-base.function",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [900, 120]
     },
     {
       "parameters": {
-        "dataType": "string",
-        "value1": "={{ $json.platform }}",
         "rules": {
-          "rules": [
+          "values": [
             {
-              "value2": "twitter",
-              "output": 0
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.platform }}",
+                    "rightValue": "twitter",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "twitter"
             },
             {
-              "value2": "facebook",
-              "output": 1
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.platform }}",
+                    "rightValue": "facebook",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "facebook"
             },
             {
-              "value2": "linkedin",
-              "output": 2
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.platform }}",
+                    "rightValue": "linkedin",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "linkedin"
             },
             {
-              "value2": "instagram",
-              "output": 3
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.platform }}",
+                    "rightValue": "instagram",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "instagram"
             },
             {
-              "value2": "telegram",
-              "output": 4
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.platform }}",
+                    "rightValue": "telegram",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "telegram"
             }
           ]
-        }
+        },
+        "options": {}
       },
       "id": "platform-router",
       "name": "Platform Router",
       "type": "n8n-nodes-base.switch",
-      "typeVersion": 1,
+      "typeVersion": 3.2,
       "position": [1120, 120]
     },
     {
       "parameters": {
+        "resource": "tweet",
         "text": "={{ $json.twitter_text }}",
         "additionalFields": {}
       },
       "id": "post-to-twitter",
       "name": "Post to Twitter",
       "type": "n8n-nodes-base.twitter",
-      "typeVersion": 1,
+      "typeVersion": 2,
       "position": [1340, 0],
       "continueOnFail": true
     },
     {
       "parameters": {
         "operation": "create",
-        "pageId": "",
+        "pageId": "={{ $json.facebook_page_id || '' }}",
         "content": "={{ $json.facebook_text }}"
       },
       "id": "post-to-facebook",
       "name": "Post to Facebook",
-      "type": "n8n-nodes-base.facebook",
+      "type": "n8n-nodes-base.facebookGraphApi",
       "typeVersion": 1,
       "position": [1340, 120],
       "continueOnFail": true
     },
     {
       "parameters": {
+        "resource": "post",
+        "operation": "create",
         "text": "={{ $json.linkedin_text }}",
         "additionalFields": {}
       },
@@ -195,204 +335,241 @@
     },
     {
       "parameters": {
-        "authentication": "httpHeaderAuth",
-        "requestMethod": "POST",
+        "method": "POST",
         "url": "https://graph.instagram.com/v12.0/me/media",
-        "bodyParametersJson": "={{ JSON.stringify({caption: $json.instagram_text, image_url: $json.image}) }}"
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\"caption\": $json.instagram_text, \"image_url\": $json.image} }}",
+        "options": {}
       },
       "id": "post-to-instagram",
       "name": "Post to Instagram",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 2,
+      "typeVersion": 4.2,
       "position": [1340, 360],
       "continueOnFail": true
     },
     {
       "parameters": {
-        "chatId": "",
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $json.telegram_chat_id || '' }}",
         "text": "={{ $json.telegram_text }}",
         "additionalFields": {}
       },
       "id": "post-to-telegram",
       "name": "Post to Telegram",
       "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1,
+      "typeVersion": 1.2,
       "position": [1340, 480],
       "continueOnFail": true
     },
     {
       "parameters": {
-        "values": {
-          "string": [
+        "assignments": {
+          "assignments": [
             {
+              "id": "assign1",
               "name": "platform",
-              "value": "twitter"
+              "value": "twitter",
+              "type": "string"
             },
             {
-              "name": "error_message",
-              "value": "={{ $json.error ? $json.error.message : '' }}"
-            }
-          ],
-          "boolean": [
-            {
+              "id": "assign2",
               "name": "success",
-              "value": "={{ !$json.error }}"
+              "value": "={{ !$json.error }}",
+              "type": "boolean"
+            },
+            {
+              "id": "assign3",
+              "name": "error_message",
+              "value": "={{ $json.error ? $json.error.message : '' }}",
+              "type": "string"
             }
           ]
-        }
+        },
+        "options": {}
       },
       "id": "twitter-result",
       "name": "Twitter Result",
       "type": "n8n-nodes-base.set",
-      "typeVersion": 1,
+      "typeVersion": 3.4,
       "position": [1560, 0]
     },
     {
       "parameters": {
-        "values": {
-          "string": [
+        "assignments": {
+          "assignments": [
             {
+              "id": "assign1",
               "name": "platform",
-              "value": "facebook"
+              "value": "facebook",
+              "type": "string"
             },
             {
-              "name": "error_message",
-              "value": "={{ $json.error ? $json.error.message : '' }}"
-            }
-          ],
-          "boolean": [
-            {
+              "id": "assign2",
               "name": "success",
-              "value": "={{ !$json.error }}"
+              "value": "={{ !$json.error }}",
+              "type": "boolean"
+            },
+            {
+              "id": "assign3",
+              "name": "error_message",
+              "value": "={{ $json.error ? $json.error.message : '' }}",
+              "type": "string"
             }
           ]
-        }
+        },
+        "options": {}
       },
       "id": "facebook-result",
       "name": "Facebook Result",
       "type": "n8n-nodes-base.set",
-      "typeVersion": 1,
+      "typeVersion": 3.4,
       "position": [1560, 120]
     },
     {
       "parameters": {
-        "values": {
-          "string": [
+        "assignments": {
+          "assignments": [
             {
+              "id": "assign1",
               "name": "platform",
-              "value": "linkedin"
+              "value": "linkedin",
+              "type": "string"
             },
             {
-              "name": "error_message",
-              "value": "={{ $json.error ? $json.error.message : '' }}"
-            }
-          ],
-          "boolean": [
-            {
+              "id": "assign2",
               "name": "success",
-              "value": "={{ !$json.error }}"
+              "value": "={{ !$json.error }}",
+              "type": "boolean"
+            },
+            {
+              "id": "assign3",
+              "name": "error_message",
+              "value": "={{ $json.error ? $json.error.message : '' }}",
+              "type": "string"
             }
           ]
-        }
+        },
+        "options": {}
       },
       "id": "linkedin-result",
       "name": "LinkedIn Result",
       "type": "n8n-nodes-base.set",
-      "typeVersion": 1,
+      "typeVersion": 3.4,
       "position": [1560, 240]
     },
     {
       "parameters": {
-        "values": {
-          "string": [
+        "assignments": {
+          "assignments": [
             {
+              "id": "assign1",
               "name": "platform",
-              "value": "instagram"
+              "value": "instagram",
+              "type": "string"
             },
             {
-              "name": "error_message",
-              "value": "={{ $json.error ? $json.error.message : '' }}"
-            }
-          ],
-          "boolean": [
-            {
+              "id": "assign2",
               "name": "success",
-              "value": "={{ !$json.error }}"
+              "value": "={{ !$json.error }}",
+              "type": "boolean"
+            },
+            {
+              "id": "assign3",
+              "name": "error_message",
+              "value": "={{ $json.error ? $json.error.message : '' }}",
+              "type": "string"
             }
           ]
-        }
+        },
+        "options": {}
       },
       "id": "instagram-result",
       "name": "Instagram Result",
       "type": "n8n-nodes-base.set",
-      "typeVersion": 1,
+      "typeVersion": 3.4,
       "position": [1560, 360]
     },
     {
       "parameters": {
-        "values": {
-          "string": [
+        "assignments": {
+          "assignments": [
             {
+              "id": "assign1",
               "name": "platform",
-              "value": "telegram"
+              "value": "telegram",
+              "type": "string"
             },
             {
-              "name": "error_message",
-              "value": "={{ $json.error ? $json.error.message : '' }}"
-            }
-          ],
-          "boolean": [
-            {
+              "id": "assign2",
               "name": "success",
-              "value": "={{ !$json.error }}"
+              "value": "={{ !$json.error }}",
+              "type": "boolean"
+            },
+            {
+              "id": "assign3",
+              "name": "error_message",
+              "value": "={{ $json.error ? $json.error.message : '' }}",
+              "type": "string"
             }
           ]
-        }
+        },
+        "options": {}
       },
       "id": "telegram-result",
       "name": "Telegram Result",
       "type": "n8n-nodes-base.set",
-      "typeVersion": 1,
+      "typeVersion": 3.4,
       "position": [1560, 480]
     },
     {
       "parameters": {
-        "mode": "mergeByIndex",
-        "join": "inner"
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
       },
       "id": "merge-results",
       "name": "Merge Results",
       "type": "n8n-nodes-base.merge",
-      "typeVersion": 2,
+      "typeVersion": 3,
       "position": [1780, 240]
     },
     {
       "parameters": {
-        "functionCode": "const results = items;\n\nconst posted_to = [];\nconst failed = [];\n\nfor (const result of results) {\n  if (result.json.success) {\n    posted_to.push(result.json.platform);\n  } else {\n    failed.push(result.json.platform);\n  }\n}\n\nconst request_id = `${new Date().toISOString()}-${$executionId}`;\nconst timestamp = new Date().toISOString();\n\nreturn [\n  {\n    json: {\n      status: 'completed',\n      posted_to: posted_to,\n      failed: failed,\n      request_id: request_id,\n      timestamp: timestamp\n    }\n  }\n];"
+        "jsCode": "const results = $input.all();\n\nconst posted_to = [];\nconst failed = [];\n\nfor (const result of results) {\n  if (result.json.success) {\n    posted_to.push(result.json.platform);\n  } else {\n    failed.push({\n      platform: result.json.platform,\n      error: result.json.error_message\n    });\n  }\n}\n\nconst request_id = `${new Date().toISOString()}-${$execution.id}`;\nconst timestamp = new Date().toISOString();\n\nreturn [\n  {\n    json: {\n      status: 'completed',\n      posted_to: posted_to,\n      failed: failed,\n      total_requested: results.length,\n      successful: posted_to.length,\n      failed_count: failed.length,\n      request_id: request_id,\n      timestamp: timestamp\n    }\n  }\n];"
       },
       "id": "format-response",
       "name": "Format Response",
-      "type": "n8n-nodes-base.function",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [2000, 240]
     },
     {
-      "parameters": {},
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
       "id": "respond-success",
       "name": "Respond Success",
       "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1,
+      "typeVersion": 1.1,
       "position": [2220, 240]
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ $json }}"
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 400
+        }
       },
       "id": "respond-error",
       "name": "Respond Error",
       "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1,
+      "typeVersion": 1.1,
       "position": [900, 480]
     }
   ],
@@ -631,12 +808,13 @@
       ]
     }
   },
-  "active": false,
-  "settings": {},
-  "versionId": "1",
-  "id": "1",
-  "meta": {
-    "instanceId": "n8n-instance"
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
   },
-  "tags": []
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2026-01-05T00:00:00.000Z",
+  "versionId": "1"
 }
